@@ -1,0 +1,260 @@
+#include<iostream>
+#include<fstream>
+#include<string>
+#include<unordered_map>
+#include<unordered_set>
+#include "lxmsc.h"
+using namespace std;
+using namespace llvm;
+using namespace SVF;
+/*
+*使用说明*
+ * 首先编辑出一系列.c文件，例如叫做x1.c、x2.c、x3.c……
+ * 然后多次调用lxllvm.sh，格式为：lxllvm.sh x1.c、lxllvm.sh x2.c、lxllvm.sh x3.c……
+ * 调用完成后，会建立一个名为xn文件夹，内部有xn.c, xn.ll, xn.bc, xn.opt文件
+ * 建立一个y.txt，内容为
+ #
+ x1
+ x2
+ x3
+ ……
+ #
+ * 再调用本程序对多个文件进行流分析，格式为: 
+ ./main 0	运行保值分析
+ ./main 1	运行符号分析
+ * 会进入x1、x2、x3……文件夹
+ *分析相应的x1.bc、x2.bc、x3.bc……文件
+ *输出文件也在x1、x2、x3……文件夹中
+*/
+//保值分析和符号分析
+class OutAnalyticAnswer
+{
+	//当前给定的文本文件
+	string txtname;
+	//当前分析的文件
+	string filename;
+	//当前分析文件目标文件夹相对路径
+	string fullname;
+	//unsigned变量
+	unordered_set<string> unitem;
+	//出错的行数
+	vector<int> myerror;
+	//无符号分析
+	string my_UnsAnalysis(string filefolder)
+	{
+		string file = "./" + filefolder + "/" + filefolder + ".c";
+		//读取文本文件
+		ifstream fp(file);
+		//打开失败
+		if (fp.fail())
+		{
+			printf("无法打开该文件！");
+			return;
+		}
+		//判断文件内容是否为空
+		long end;
+		fp.seekg(0, SEEK_END);
+		end = fp.tellg();
+		if (!end)
+		{
+			printf("该文本文件为空！");
+			return;
+		}
+		//设置文件指针为开头
+		fp.seekg(0, SEEK_SET);
+		//暂时存储读取的字符串
+		string analyze;
+		//读取的行数
+		int lines=0;
+		while (getline(fp, analyze))
+		{
+			//行数增加
+			++lines;
+			//判断是否出现unsigned
+			bool judge = false;
+			//读取一行字符串长度
+			int size = analyze.size();
+			for (int i = 0; i < analyze.size(); ++i)
+			{
+				if (analyze[i] == ' ')
+					continue;
+				else
+				{
+					//判断是否已经读到了unsigned
+					if (judge)
+					{
+						int n = i + 1;
+						string str = ""+analyze[i];
+						//str存储当前的单词
+						while ((analyze[n] != ' ') || (analyze[n] != '='))
+						{
+							str += analyze[n];
+							++n;
+						}
+						if (analyze[n] != '=')
+						{
+							unitem.insert(str);
+						}
+						else
+						{
+							str.clear();
+							while (analyze[n] != ' ')
+							{
+								str += analyze[n];
+								++n;
+							}
+							if (unitem.find(str) == unitem.end())
+								myerror.push_back(lines);
+						}
+						i = n - 1;
+					}
+					else 
+					{
+						string str;
+						for (int i1 = 0; (i1 < 8) && (i + i1 < ); ++i1)
+						{
+							str += analyze[i + i1];
+						}
+						if (str == "unsigned")
+						{
+							judge = true;
+							i += 7;
+						}
+						else
+						{
+							break;
+						}
+					}
+				}
+			}
+		}
+		//错误行数记录完毕，数据清空
+		unitem.clear();
+		//关闭分析的文件
+		fp.close();
+		//输出分析结果::
+		string outfile = "./" + filefolder + "/" + "unsigned" + filefolder + ".txt";
+		//输出文本文件
+		ofstream ofp(outfile);
+		//打开失败
+		if (fp.fail())
+		{
+			printf("unsigned分析输出文件出错！");
+			return;
+		}
+		else
+		{
+			ofp<<"unsigned分析后的错误" << endl;
+			for (int it1 = 0; it1 < myerror.size(); ++it1)
+			{
+				ofp << "error line:";
+				ofp << myerror[it1]<<endl;
+			}
+			//结果输出完毕，关闭输出文件
+			ofp.close();
+		}
+	}
+		void ValueMaintainAnalyzing()
+	{
+		string fullName("./" + filename + "/" + filename + ".bc");
+		/// SVF可以将多个bc文件生成SVF模块，这里只写一个bc文件
+		vector<string> vec(1, fullName);
+		SVFModule* svfModule = LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(vec);
+		SymbolTableInfo* symbolTableInfo = SymbolTableInfo::Symbolnfo();
+		string signAnaName("./" + filename + "/" + filename + "_signanalysis.txt");
+		ofstream out(signAnaName);
+		ValueMaintainAnalyzer analyzer(svfModule, symbolTableInfo);
+		analyzer.report(out);
+		out.close();
+
+		//unsigned 分析
+		my_UnsAnalysis(filename);
+
+
+		return;
+	}
+	void SignAnalyzing()
+	{
+		string fullName("./" + filename + "/" + filename + ".bc");
+		/// SVF可以将多个bc文件生成SVF模块，这里只写一个bc文件
+		vector<string> vec(1, fullName);
+		SVFModule* svfModule = LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(vec);
+		SymbolTableInfo* symbolTableInfo = SymbolTableInfo::Symbolnfo();
+		string signAnaName("./" + filename + "/" + filename + "_signanalysis.txt");
+		ofstream out(signAnaName);
+		ValueMaintainAnalyzer analyzer(svfModule, symbolTableInfo);
+		analyzer.report(out);
+		out.close();
+
+		//unsigned 分析
+		my_UnsAnalysis(filename);
+
+		return;
+	}
+public:
+	//无参构造使用是无效的
+	OutAnalyticAnswer()
+	{
+		printf("你需要给定分析文件列表！");
+	}
+	OutAnalyticAnswer(char* name):txtname(name)
+	{}
+	void AnalyzeBegin(char mode)
+	{
+		//读取文本文件
+		ifstream fp(txtname);
+		//打开失败
+		if (fp.fail())
+		{
+			printf("无法打开该文件！");
+			return;
+		}
+		//判断文件内容是否为空
+		long end;
+		fp.seekg(0, SEEK_END);
+		end=fp.tellg();
+		if (!end)
+		{
+			printf("该文本文件为空！");
+			return;
+		}
+		//创建分析所需类
+		//判断要做的操作
+		if (mode == '0')
+		{
+			//读取文本,每一行都是一个要分析的文件
+			while (getline(fp, filename))
+			{
+				ValueMaintainAnalyzing();
+			}
+		}
+		else {
+			//读取文本,每一行都是一个要分析的文件
+			while (getline(fp, filename))
+			{
+				SignAnalyzing();
+			}
+		}
+		return;
+	}
+	void AnalyzingUnsigned()
+	{
+		bool judge = false;
+
+	}
+	
+};
+
+
+int main(int argc, char*argv[])
+{
+	if ((argc != 3)|| (argv[2][0] < '0') || (argv[2][0] > '1'))
+	{
+		printf("\n参数输入错误!");
+		return -1;
+	}
+	OutAnalyticAnswer instance(argv[1]);
+	instance.AnalyzeBegin(argv[2][0]);
+	printf("分析完成！");
+	return 0;
+}
